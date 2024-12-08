@@ -61,9 +61,10 @@
 // #define esp32autoreconnect    // implement esp32 autoreconnect event listener kludge, @DEPRECATED
 // autoreconnect is WORKING https://github.com/espressif/arduino-esp32/issues/653#issuecomment-405604766
 
-#define WM_WEBSERVERSHIM      // use webserver shim lib
 
 #define WM_G(string_literal)  (String(FPSTR(string_literal)).c_str())
+
+#include "ESPAsyncWebServer.h"
 
 #ifdef ESP8266
 
@@ -71,7 +72,6 @@
       #include "user_interface.h"
     }
     #include <ESP8266WiFi.h>
-    #include <ESP8266WebServer.h>
 
     #ifdef WM_MDNS
         #include <ESP8266mDNS.h>
@@ -88,16 +88,6 @@
     
     #define WIFI_getChipId() (uint32_t)ESP.getEfuseMac()
     #define WM_WIFIOPEN   WIFI_AUTH_OPEN
-
-    #ifndef WEBSERVER_H
-        #ifdef WM_WEBSERVERSHIM
-            #include <WebServer.h>
-        #else
-            #include <ESP8266WebServer.h>
-            // Forthcoming official ? probably never happening
-            // https://github.com/esp8266/ESPWebServer
-        #endif
-    #endif
 
     #ifdef WM_ERASE_NVS
        #include <nvs.h>
@@ -269,9 +259,6 @@ class WiFiManager
     //manually stop the web portal if started manually
     void          stopWebPortal();
 
-    // Run webserver processing, if setConfigPortalBlocking(false)
-    boolean       process();
-
     // get the AP name of the config portal, so it can be used in the callback
     String        getConfigPortalSSID();
     int           getRSSIasQuality(int RSSI);
@@ -329,7 +316,7 @@ class WiFiManager
 
     //sets timeout before AP,webserver loop ends and exits even if there has been no setup.
     //useful for devices that failed to connect at some point and got stuck in a webserver loop
-    //in seconds setConfigPortalTimeout is a new name for setTimeout, ! not used if setConfigPortalBlocking
+    //in seconds setConfigPortalTimeout is a new name for setTimeout
     void          setConfigPortalTimeout(unsigned long seconds);
     void          setTimeout(unsigned long seconds); // @deprecated, alias
 
@@ -364,11 +351,6 @@ class WiFiManager
     
     //if this is set, it will exit after config, even if connection is unsuccessful.
     void          setBreakAfterConfig(boolean shouldBreak);
-    
-    // if this is set, portal will be blocking and wait until save or exit, 
-    // is false user must manually `process()` to handle config portal,
-    // setConfigPortalTimeout is ignored in this mode, user is responsible for closing configportal
-    void          setConfigPortalBlocking(boolean shouldBlock);
     
     //add custom html at inside <head> for all pages
     void          setCustomHeadElement(const char* html);
@@ -499,12 +481,8 @@ class WiFiManager
 
 
     std::unique_ptr<DNSServer>        dnsServer;
-
-    #if defined(ESP32) && defined(WM_WEBSERVERSHIM)
-        using WM_WebServer = WebServer;
-    #else
-        using WM_WebServer = ESP8266WebServer;
-    #endif
+    
+    using WM_WebServer = AsyncWebServer;
     
     std::unique_ptr<WM_WebServer> server;
 
@@ -580,7 +558,6 @@ class WiFiManager
     boolean       _removeDuplicateAPs     = true;  // remove dup aps from wifiscan
     boolean       _showPassword           = false; // show or hide saved password on wifi form, might be a security issue!
     boolean       _shouldBreakAfterConfig = false; // stop configportal on save failure
-    boolean       _configPortalIsBlocking = true;  // configportal enters blocking loop 
     boolean       _enableCaptivePortal    = true;  // enable captive portal redirection
     boolean       _userpersistent         = true;  // users preffered persistence to restore
     boolean       _wifiAutoReconnect      = true;  // there is no platform getter for this, we must assume its true and make it so
@@ -663,33 +640,34 @@ protected:
 
     // webserver handlers
 public:
-    void          handleNotFound();
+    void          handleNotFound(AsyncWebServerRequest *request);
+    String        getHTTPHead(String title);
+
 protected:
-    void          HTTPSend(const String &content);
-    void          handleRoot();
-    void          handleWifi(boolean scan);
-    void          handleWifiSave();
-    void          handleInfo();
-    void          handleReset();
+    void          HTTPSend(const String &content, AsyncWebServerRequest *request);
+    void          handleRoot(AsyncWebServerRequest *request);
+    void          handleWifi(AsyncWebServerRequest *request, boolean scan);
+    void          handleWifiSave(AsyncWebServerRequest *request);
+    void          handleInfo(AsyncWebServerRequest *request);
+    void          handleReset(AsyncWebServerRequest *request);
 
-    void          handleExit();
-    void          handleClose();
+    void          handleExit(AsyncWebServerRequest *request);
+    void          handleClose(AsyncWebServerRequest *request);
     // void          handleErase();
-    void          handleErase(boolean opt);
-    void          handleParam();
-    void          handleWiFiStatus();
-    void          handleRequest();
-    void          handleParamSave();
-    void          doParamSave();
+    void          handleErase(AsyncWebServerRequest *request, boolean opt);
+    void          handleParam(AsyncWebServerRequest *request);
+    void          handleWiFiStatus(AsyncWebServerRequest *request);
+    void          handleRequest(AsyncWebServerRequest *request);
+    void          handleParamSave(AsyncWebServerRequest *request);
+    void          doParamSave(AsyncWebServerRequest *request);
 
-    boolean       captivePortal();
+    boolean       captivePortal(AsyncWebServerRequest *request);
     boolean       configPortalHasTimeout();
-    uint8_t       processConfigPortal();
     void          stopCaptivePortal();
 	// OTA Update handler
-	void          handleUpdate();
-	void          handleUpdating();
-	void          handleUpdateDone();
+	void          handleUpdate(AsyncWebServerRequest *request);
+	void          handleUpdating(AsyncWebServerRequest *request);
+	void          handleUpdateDone(AsyncWebServerRequest *request);
 
 
     // wifi platform abstractions
@@ -751,7 +729,6 @@ protected:
     String        getIpForm(String id, String title, String value);
     String        getScanItemOut();
     String        getStaticOut();
-    String        getHTTPHead(String title);
     String        getMenuOut();
     //helpers
     boolean       isIp(String str);
