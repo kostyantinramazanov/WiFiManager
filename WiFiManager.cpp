@@ -1710,8 +1710,17 @@ void WiFiManager::handleWifiSave(AsyncWebServerRequest *request) {
   if(_showBack) page += FPSTR(HTTP_BACKBTN);
   page += FPSTR(HTTP_END);
 
-  AsyncWebServerResponse *response = request->beginResponse(200, F(HTTP_HEAD_CT), page);
+  uint8_t res = connectWifi(_ssid, _pass, _connectonsave) == WL_CONNECTED;
+
+  AsyncWebServerResponse *response = request->beginResponse(302, F(HTTP_HEAD_CT), page);
   response->addHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL)); // @HTTPHEAD send cors
+  if (res) {
+    String serverLoc = toStringIp(WiFi.softAPIP());
+
+    if (_httpPort != 80) serverLoc += ":" + (String)_httpPort; // add port if not default
+    // bool doredirect = serverLoc != hostHeader; // redirect if hostheader not server ip, prevent redirect loops
+    response->addHeader(F("Location"), (String)F("http://") + serverLoc + R_info, true); // @HTTPHEAD send redirect
+  }
   request->send(response);
 
   #ifdef WM_DEBUG_LEVEL
