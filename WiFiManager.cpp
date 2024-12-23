@@ -654,9 +654,10 @@ void WiFiManager::setupHTTPServer(){
   server->on(WM_G(R_erase),      std::bind(&WiFiManager::handleErase, this, std::placeholders::_1, false));
   server->on(WM_G(R_status),     std::bind(&WiFiManager::handleWiFiStatus, this, std::placeholders::_1));
   server->onNotFound(std::bind(&WiFiManager::handleNotFound, this, std::placeholders::_1));
-  
+
   server->on(WM_G(R_update), std::bind(&WiFiManager::handleUpdate, this, std::placeholders::_1));
-  server->on(WM_G(R_updatedone), HTTP_POST, std::bind(&WiFiManager::handleUpdateDone, this, std::placeholders::_1), std::bind(&WiFiManager::handleUpdating, this, std::placeholders::_1));
+  server->on(WM_G(R_updatedone), HTTP_POST, std::bind(&WiFiManager::handleUpdateDone, this, std::placeholders::_1),
+        std::bind(&WiFiManager::handleUpdating, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
   
   server->begin(); // Web server start
   #ifdef WM_DEBUG_LEVEL
@@ -3716,7 +3717,7 @@ void WiFiManager::handleUpdate(AsyncWebServerRequest *request) {
 
 // TODO: Fix me later
 // upload via /u POST
-void WiFiManager::handleUpdating(AsyncWebServerRequest *request){
+void WiFiManager::handleUpdating(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final){
   // @todo
   // cannot upload files in captive portal, file select is not allowed, show message with link or hide
   // cannot upload if softreset after upload, maybe check for hard reset at least for dev, ERROR[11]: Invalid bootstrapping state, reset ESP8266 before updating
@@ -3727,118 +3728,119 @@ void WiFiManager::handleUpdating(AsyncWebServerRequest *request){
   // combine route handlers into one callback and use argument or post checking instead of mutiple functions maybe, if POST process else server upload page?
   // [x] add upload checking, do we need too check file?
   // convert output to debugger if not moving to example
-	
-  // if (captivePortal()) return; // If captive portal redirect instead of displaying the page
-  // bool error = false;
-  // unsigned long _configPortalTimeoutSAV = _configPortalTimeout; // store cp timeout
-  // _configPortalTimeout = 0; // disable timeout
 
-  // // handler for the file upload, get's the sketch bytes, and writes
-	// // them through the Update object
-	// HTTPUpload& upload = server->upload();
+  if (captivePortal(request)) return; // If captive portal redirect instead of displaying the page
+  bool error = false;
+  unsigned long _configPortalTimeoutSAV = _configPortalTimeout; // store cp timeout
+  _configPortalTimeout = 0; // disable timeout
 
-  // // UPLOAD START
-	// if (upload.status == UPLOAD_FILE_START) {
-	//   // if(_debug) Serial.setDebugOutput(true);
-  //   uint32_t maxSketchSpace;
+  request->onDisconnect([=, &error]() {
+    if(!final) {
+      Update.abort();
+      DEBUG_WM(F("[OTA] Update was aborted"));
+      error = true;
+    }
+  });
+
+  // UPLOAD START    
+	if (index == 0) {
+	  // if(_debug) Serial.setDebugOutput(true);
+    uint32_t maxSketchSpace;
     
-  //   // Use new callback for before OTA update
-  //   if (_preotaupdatecallback != NULL) {
-  //     _preotaupdatecallback();  // @CALLBACK
-  //   }
-  //   #ifdef ESP8266
-  //   		WiFiUDP::stopAll();
-  //   		maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
-  //   #elif defined(ESP32)
-  //         // Think we do not need to stop WiFIUDP because we haven't started a listener
-  //   		  // maxSketchSpace = (ESP.getFlashChipSize() - 0x1000) & 0xFFFFF000;
-  //         // #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF // include update.h
-  //         maxSketchSpace = UPDATE_SIZE_UNKNOWN;
-  //   #endif
+    // Use new callback for before OTA update
+    if (_preotaupdatecallback != NULL) {
+      _preotaupdatecallback();  // @CALLBACK
+    }
+    #ifdef ESP8266
+    		WiFiUDP::stopAll();
+    		maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+    #elif defined(ESP32)
+          // Think we do not need to stop WiFIUDP because we haven't started a listener
+    		  // maxSketchSpace = (ESP.getFlashChipSize() - 0x1000) & 0xFFFFF000;
+          // #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF // include update.h
+          maxSketchSpace = UPDATE_SIZE_UNKNOWN;
+    #endif
 
-  //   #ifdef WM_DEBUG_LEVEL
-  //   DEBUG_WM(WM_DEBUG_VERBOSE,"[OTA] Update file: ", upload.filename.c_str());
-  //   #endif
+    #ifdef WM_DEBUG_LEVEL
+    DEBUG_WM(WM_DEBUG_VERBOSE,"[OTA] Update file: ", filename.c_str());
+    #endif
 
-  //   // Update.onProgress(THandlerFunction_Progress fn);
-  //   // Update.onProgress([](unsigned int progress, unsigned int total) {
-  //   //       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  //   // });
+    // Update.onProgress(THandlerFunction_Progress fn);
+    Update.onProgress([](unsigned int progress, unsigned int total) {
+          Serial.printf("Progress: %u%%\n", (progress / (total / 100)));
+    });
 
-  // 	if (!Update.begin(maxSketchSpace)) { // start with max available size
-  //       #ifdef WM_DEBUG_LEVEL
-  //       DEBUG_WM(WM_DEBUG_ERROR,F("[ERROR] OTA Update ERROR"), Update.getError());
-  //       #endif
-  //       error = true;
-  //       Update.end(); // Not sure the best way to abort, I think client will keep sending..
-  // 	}
-	// }
-  // // UPLOAD WRITE
-  // else if (upload.status == UPLOAD_FILE_WRITE) {
-	// 	// Serial.print(".");
-	// 	if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-  //     #ifdef WM_DEBUG_LEVEL
-  //     DEBUG_WM(WM_DEBUG_ERROR,F("[ERROR] OTA Update WRITE ERROR"), Update.getError());
-	// 		//Update.printError(Serial); // write failure
-  //     #endif
-  //     error = true;
-	// 	}
-	// }
-  // // UPLOAD FILE END
-  // else if (upload.status == UPLOAD_FILE_END) {
-	// 	if (Update.end(true)) { // true to set the size to the current progress
-  //     #ifdef WM_DEBUG_LEVEL
-  //     DEBUG_WM(WM_DEBUG_VERBOSE,F("\n\n[OTA] OTA FILE END bytes: "), upload.totalSize);
-	// 		// Serial.printf("Updated: %u bytes\r\nRebooting...\r\n", upload.totalSize);
-  //     #endif
-	// 	}
-  //   else {
-	// 		// Update.printError(Serial);
-  //     error = true;
-	// 	}
-	// }
-  // // UPLOAD ABORT
-  // else if (upload.status == UPLOAD_FILE_ABORTED) {autoConnect
-	// 	Update.end();
-	// 	DEBUG_WM(F("[OTA] Update was aborted"));
-  //   error = true;
-  // }
-  // if(error) _configPortalTimeout = _configPortalTimeoutSAV;
-	// delay(0);
+  	if (!Update.begin(maxSketchSpace)) { // start with max available size
+        #ifdef WM_DEBUG_LEVEL
+        DEBUG_WM(WM_DEBUG_ERROR,F("[ERROR] OTA Update ERROR"), Update.getError());
+        #endif
+        error = true;
+        Update.abort(); // Not sure the best way to abort, I think client will keep sending..
+  	}
+	}
+  // UPLOAD WRITE
+
+  if (Update.write(data, len) != len)
+  {
+  #ifdef WM_DEBUG_LEVEL
+    DEBUG_WM(WM_DEBUG_ERROR, F("[ERROR] OTA Update WRITE ERROR"), Update.getError());
+    // Update.printError(Serial); // write failure
+  #endif
+    error = true;
+  }
+
+  // UPLOAD FILE END
+  if (final) {
+    if (Update.end(true)) { // true to set the size to the current progress
+    #ifdef WM_DEBUG_LEVEL
+      DEBUG_WM(WM_DEBUG_VERBOSE, F("\n\n[OTA] OTA FILE END bytes: "), index + len);
+      // Serial.printf("Updated: %u bytes\r\nRebooting...\r\n", upload.totalSize);
+    #endif
+    } else {
+      error = true;
+    }
+  }
+  if (error) {
+    _configPortalTimeout = _configPortalTimeoutSAV;
+  }
 }
 
 // upload and ota done, show status
 void WiFiManager::handleUpdateDone(AsyncWebServerRequest *request) {
-	DEBUG_WM(WM_DEBUG_VERBOSE, F("<- Handle update done"));
-	// if (captivePortal()) return; // If captive portal redirect instead of displaying the page
+  DEBUG_WM(WM_DEBUG_VERBOSE, F("<- Handle update done"));
+  if (captivePortal(request)) return; // If captive portal redirect instead of displaying the page
 
-	String page = getHTTPHead(FPSTR(S_options)); // @token options
-	String str  = FPSTR(HTTP_ROOT_MAIN);
-  str.replace(FPSTR(T_t),_title);
-	str.replace(FPSTR(T_v), configPortalActive ? _apName : WiFi.localIP().toString()); // use ip if ap is not active for heading
-	page += str;
+  String page = getHTTPHead(FPSTR(S_options)); // @token options
+  String str = FPSTR(HTTP_ROOT_MAIN);
+  str.replace(FPSTR(T_t), _title);
+  str.replace(FPSTR(T_v), configPortalActive ? _apName : WiFi.localIP().toString()); // use ip if ap is not active for heading
+  page += str;
 
-	if (Update.hasError()) {
-		page += FPSTR(HTTP_UPDATE_FAIL);
-    #ifdef ESP32
+  if (Update.hasError())
+  {
+    page += FPSTR(HTTP_UPDATE_FAIL);
+#ifdef ESP32
     page += "OTA Error: " + (String)Update.errorString();
-    #else
+#else
     page += "OTA Error: " + (String)Update.getError();
-    #endif
-		DEBUG_WM(F("[OTA] update failed"));
-	}
-	else {
-		page += FPSTR(HTTP_UPDATE_SUCCESS);
-		DEBUG_WM(F("[OTA] update ok"));
-	}
-	page += FPSTR(HTTP_END);
+#endif
+    DEBUG_WM(F("[OTA] update failed"));
+  }
+  else
+  {
+    page += FPSTR(HTTP_UPDATE_SUCCESS);
+    DEBUG_WM(F("[OTA] update ok"));
+  }
+  
+  page += FPSTR(HTTP_END);
 
-	HTTPSend(page, request);
+  HTTPSend(page, request);
 
-	delay(1000); // send page
-	if (!Update.hasError()) {
-		ESP.restart();
-	}
+  if (!Update.hasError()){
+    ticker.once_ms(1000, []() {
+      ESP.restart();
+    });  
+  }
 }
 
 #endif

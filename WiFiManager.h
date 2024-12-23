@@ -64,6 +64,7 @@
 
 #define WM_G(string_literal)  (String(FPSTR(string_literal)).c_str())
 
+#include <Ticker.h>
 #include "ESPAsyncWebServer.h"
 
 #ifdef ESP8266
@@ -577,6 +578,7 @@ class WiFiManager
     String        _bodyClass              = ""; // class to add to body
     String        _title                  = FPSTR(S_brand); // app title -  default WiFiManager
 
+    Ticker        ticker;
     // internal options
     
     // wifiscan notes
@@ -666,7 +668,7 @@ protected:
     void          stopCaptivePortal();
 	// OTA Update handler
 	void          handleUpdate(AsyncWebServerRequest *request);
-	void          handleUpdating(AsyncWebServerRequest *request);
+	void          handleUpdating(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final);
 	void          handleUpdateDone(AsyncWebServerRequest *request);
 
 
@@ -771,7 +773,7 @@ protected:
     
     // Set default debug level
     #ifndef WM_DEBUG_LEVEL
-    #define WM_DEBUG_LEVEL WM_DEBUG_NOTIFY
+    #define WM_DEBUG_LEVEL WM_DEBUG_SILENT
     #endif
 
     // override debug level OFF
