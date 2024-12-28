@@ -2328,6 +2328,8 @@ void WiFiManager::reportStatus(String &page){
       str = FPSTR(HTTP_STATUS_ON);
       str.replace(FPSTR(T_i),WiFi.localIP().toString());
       str.replace(FPSTR(T_v),htmlEntities(WiFi_SSID()));
+      str.replace(FPSTR(T_hw),htmlEntities(_hardwareVersion));
+      str.replace(FPSTR(T_fw),htmlEntities(_firmwareVersion));
     }
     else {
       str = FPSTR(HTTP_STATUS_OFF);
@@ -3843,4 +3845,11 @@ void WiFiManager::handleUpdateDone(AsyncWebServerRequest *request) {
   }
 }
 
+void WiFiManager::setHardwareVersion(String hardwareVersion) {
+  this->_hardwareVersion = hardwareVersion;
+}
+
+void WiFiManager::setFirmwareVersion(String firmwareVersion) {
+  this->_firmwareVersion = firmwareVersion;
+}
 #endif

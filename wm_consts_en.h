@@ -91,6 +91,8 @@ const char T_q[]                  PROGMEM = "{q}"; // @token q
 const char T_r[]                  PROGMEM = "{r}"; // @token r
 const char T_R[]                  PROGMEM = "{R}"; // @token R
 const char T_h[]                  PROGMEM = "{h}"; // @token h
+const char T_hw[]                 PROGMEM = "{hw}"; // @token hw
+const char T_fw[]                 PROGMEM = "{fw}"; // @token fw
 
 // http
 const char HTTP_HEAD_CL[]         PROGMEM = "Content-Length";

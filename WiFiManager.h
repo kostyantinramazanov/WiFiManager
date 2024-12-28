@@ -399,6 +399,9 @@ class WiFiManager
     bool          setHostname(const char * hostname);
     bool          setHostname(String hostname);
 
+    void setHardwareVersion(String hardwareVersion);
+    void setFirmwareVersion(String firmwareVersion);
+
     // show erase wifi onfig button on info page, true
     void          setShowInfoErase(boolean enabled);
 
@@ -502,6 +505,9 @@ class WiFiManager
     IPAddress     _sta_static_gw;
     IPAddress     _sta_static_sn;
     IPAddress     _sta_static_dns;
+
+    String _hardwareVersion = "0.0.0";
+    String _firmwareVersion = "0.0.0";
 
     unsigned long _configPortalStart      = 0; // ms config portal start time (updated for timeouts)
     unsigned long _webPortalAccessed      = 0; // ms last web access time
